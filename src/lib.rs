@@ -27,9 +27,6 @@
 //!   on top of [`ExportedTree`] plus per-capability install shortcuts.
 //! * **MCP support** ([`mcp`]) — [`mcp::McpServer`] model, the
 //!   [`mcp::McpCapability`] peer trait, and format-specific renderers.
-//! * **Legacy MCP installer** ([`providers`]) — the original v0.1
-//!   merge-into-existing-config installer. Retained for backwards
-//!   compatibility; new code should use [`install`] + [`mcp`].
 
 pub mod compose;
 pub mod error;
@@ -38,13 +35,13 @@ pub mod mcp;
 pub mod model;
 pub mod naming;
 pub mod output;
-pub mod providers;
 pub mod render;
 pub mod runtime;
 pub mod runtimes;
 pub mod tools;
 
 pub use error::Error;
+pub use mcp::{McpServer, McpTransport};
 pub use model::{Agent, Hook, Pack, PackBundle, Role, Script, ScriptLanguage, Skill};
 pub use output::{ExportedFile, ExportedFileType, ExportedTree};
 pub use runtime::{
@@ -52,10 +49,6 @@ pub use runtime::{
     Scope, ScopedRelative, ScriptCapability, SkillCapability,
 };
 pub use tools::{ToolEntry, ToolRegistry};
-
-// Backwards-compat re-exports for v0.1 consumers:
-pub use mcp::{McpServer, McpTransport};
-pub use providers::{AgentConfigProvider, all_providers, install_to_all};
 
 /// Convenience `Result` alias using the crate [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;

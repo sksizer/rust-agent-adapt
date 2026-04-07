@@ -1,9 +1,9 @@
 //! Unified error type for `agent-adapt`.
 //!
 //! Every fallible operation in the crate — capability rendering, the
-//! naming layer, the legacy MCP installer, the TOML/JSON (de)serializers
-//! used by [`crate::mcp::render`] — funnels its failure into this single
-//! enum. Callers match once at the boundary.
+//! naming layer, the filesystem install layer, the TOML/JSON
+//! (de)serializers used by [`crate::mcp::render`] — funnels its failure
+//! into this single enum. Callers match once at the boundary.
 
 use std::io;
 
@@ -12,8 +12,8 @@ use thiserror::Error as ThisError;
 /// All errors the crate can produce.
 #[derive(Debug, ThisError)]
 pub enum Error {
-    /// Filesystem I/O failed. Primarily produced by the install helpers in
-    /// [`crate::providers`]; kept at the top level so the [`crate::Result`]
+    /// Filesystem I/O failed. Primarily produced by the helpers in
+    /// [`crate::install`]; kept at the top level so the [`crate::Result`]
     /// alias is usable from any layer.
     #[error("io error: {0}")]
     Io(#[from] io::Error),

@@ -136,9 +136,9 @@ pub fn install_script<R: ScriptCapability>(
 /// Render and install a single [`McpServer`] onto `project_root`.
 ///
 /// Writes a **standalone** config file containing only this server.
-/// Callers that need to merge into an existing user-owned config
-/// should use [`crate::providers`] instead (the legacy v0.1 merge-aware
-/// installer).
+/// Merging into an existing user-owned config (preserving entries the
+/// user added manually) is not supported yet — add a follow-up install
+/// helper when the need arises.
 pub fn install_mcp_server<R: McpCapability>(
     runtime: &R,
     project_root: &Path,

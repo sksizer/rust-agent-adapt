@@ -11,8 +11,8 @@
 //! result in an [`crate::ExportedFile`].
 //!
 //! These helpers emit a *standalone* config containing only the given
-//! server. Merging into an existing user-owned config file is a separate
-//! concern handled by [`crate::providers`].
+//! server. Merging into an existing user-owned config file is a future
+//! [`crate::install`] concern.
 
 use crate::mcp::{McpServer, McpTransport};
 use crate::{Error, Result};

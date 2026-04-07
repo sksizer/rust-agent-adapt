@@ -14,10 +14,9 @@
 //! * [`render`] — format-specific helpers ([`render::render_claude_json`],
 //!   [`render::render_codex_toml`], [`render::render_gemini_json`]) that
 //!   runtime impls call from their [`McpCapability::render_mcp_server`]
-//!   implementation. Each returns a full standalone config file, not a
-//!   merge — in-place merging into a user's existing config file is a
-//!   separate concern handled by [`crate::providers`] (the legacy v0.1
-//!   installer) or future install helpers.
+//!   implementation. Each returns a full standalone config file — in-place
+//!   merging into an existing user-owned config file is a future
+//!   [`crate::install`] concern.
 
 pub mod render;
 
@@ -32,8 +31,8 @@ use crate::{CodingAgentRuntime, ExportedFile, Result};
 /// Implementations return a virtual file (or files) representing the MCP
 /// config for `server`. The exact format is runtime-specific — Claude
 /// Code uses JSON, Codex uses TOML, Gemini uses JSON with `httpUrl`, etc.
-/// Callers that want to *merge* the rendered entry into a user's existing
-/// config file use [`crate::providers`] or a future install helper.
+/// These helpers produce standalone config files; merging into an
+/// existing user-owned config is a future [`crate::install`] concern.
 pub trait McpCapability: CodingAgentRuntime {
     /// Render an MCP server registration for this runtime.
     fn render_mcp_server(&self, server: &McpServer) -> Result<Vec<ExportedFile>>;
