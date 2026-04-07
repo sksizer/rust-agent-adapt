@@ -1,21 +1,21 @@
-[workspace]
-resolver = "2"
-members = [
-    "crates/agent-adapt",
-    "crates/agent-adapt-core",
-]
-
-[workspace.package]
+[package]
+name = "agent-adapt"
 version = "0.1.0"
 edition = "2024"
+description = "Data model and runtime adapters for authoring coding-agent assets (skills, agents, hooks, scripts, packs, MCP servers) once and exporting to Claude Code, Codex CLI, Gemini CLI, and other runtimes."
 license = "MIT"
 repository = "https://github.com/sksizer/rust-agent-adapt"
 homepage = "https://github.com/sksizer/rust-agent-adapt"
+readme = "README.md"
+keywords = ["mcp", "ai", "agent", "claude", "codex"]
+categories = ["config", "development-tools"]
 
-[workspace.dependencies]
+[dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 toml = "0.8"
 tracing = "0.1"
+
+[dev-dependencies]
 tempfile = "3"
