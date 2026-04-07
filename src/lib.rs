@@ -15,15 +15,25 @@
 //! * **Tool vocabulary** ([`tools::ToolRegistry`]) — canonical tool names
 //!   and per-runtime translation.
 //! * **Shared rendering** ([`render`]) — YAML frontmatter builder,
-//!   `SKILL.md` emitter, and pack manifest builder, reused across every
-//!   runtime implementation.
+//!   SKILL.md emitter, agent emitter, hooks JSON emitter, script body
+//!   emitter, and pack manifest builder. Every runtime adapter reuses
+//!   these instead of duplicating serialization logic.
+//! * **Runtimes** ([`runtimes`]) — concrete [`CodingAgentRuntime`]
+//!   implementations for Claude Code, Gemini CLI, Codex CLI, OpenCode,
+//!   Amp, and generic npm packages.
+//! * **Composition** ([`compose`]) — free functions that compose
+//!   capability traits to render a whole [`PackBundle`] at once.
+//! * **Install helpers** ([`install`]) — concrete filesystem writers
+//!   on top of [`ExportedTree`] plus per-capability install shortcuts.
 //! * **MCP support** ([`mcp`]) — [`mcp::McpServer`] model, the
 //!   [`mcp::McpCapability`] peer trait, and format-specific renderers.
 //! * **Legacy MCP installer** ([`providers`]) — the original v0.1
-//!   merge-into-existing-config installer. Still exported for backwards
-//!   compatibility; new code should use [`mcp`] + an install helper.
+//!   merge-into-existing-config installer. Retained for backwards
+//!   compatibility; new code should use [`install`] + [`mcp`].
 
+pub mod compose;
 pub mod error;
+pub mod install;
 pub mod mcp;
 pub mod model;
 pub mod naming;
@@ -31,6 +41,7 @@ pub mod output;
 pub mod providers;
 pub mod render;
 pub mod runtime;
+pub mod runtimes;
 pub mod tools;
 
 pub use error::Error;
@@ -38,7 +49,7 @@ pub use model::{Agent, Hook, Pack, PackBundle, Role, Script, ScriptLanguage, Ski
 pub use output::{ExportedFile, ExportedFileType, ExportedTree};
 pub use runtime::{
     AgentCapability, CodingAgentRuntime, FieldNaming, FrontmatterDialect, HookCapability, RuntimeId, RuntimePaths,
-    Scope, ScriptCapability, SkillCapability,
+    Scope, ScopedRelative, ScriptCapability, SkillCapability,
 };
 pub use tools::{ToolEntry, ToolRegistry};
 
