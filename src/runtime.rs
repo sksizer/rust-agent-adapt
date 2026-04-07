@@ -47,56 +47,89 @@ pub enum Scope {
 }
 
 /// Convention bundle describing where a runtime stores its asset types.
+/// A path that differs between project scope and user scope.
+///
+/// Runtimes that use the same directory layout in both scopes (most of
+/// them) store the same [`PathBuf`] in both fields. Runtimes that don't
+/// (or that only support one scope) can still represent it with
+/// distinct values.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScopedRelative {
+    /// Path relative to a project root (e.g. `.claude/skills`).
+    pub project: PathBuf,
+    /// Path relative to a user's home directory (e.g. `.claude/skills`).
+    pub user: PathBuf,
+}
+
+impl ScopedRelative {
+    /// Construct a [`ScopedRelative`] where the same path is used for
+    /// both scopes — the common case.
+    pub fn same(path: impl Into<PathBuf>) -> Self {
+        let p = path.into();
+        Self { project: p.clone(), user: p }
+    }
+
+    /// Return the path that applies to the given scope.
+    pub fn for_scope(&self, scope: Scope) -> &PathBuf {
+        match scope {
+            Scope::Project => &self.project,
+            Scope::User => &self.user,
+        }
+    }
+}
+
+/// Per-asset path conventions for a runtime.
+///
+/// Each field is either a [`ScopedRelative`] (for asset types the
+/// runtime supports) or `None` (for ones it doesn't — e.g. the
+/// `NpmPackage` runtime has no hooks or MCP config).
+///
+/// Paths are **relative** — either to a project root (for
+/// [`Scope::Project`]) or to a user home directory (for [`Scope::User`]).
+/// Anchoring them against an absolute root is the install layer's job.
+///
+/// Note that asset types do not share a common prefix: Codex CLI, for
+/// example, stores skills under `.agents/skills/` (the Anthropic Agent
+/// Skills shared convention) but its MCP config under `.codex/config.toml`.
+/// Representing every path explicitly removes that ambiguity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuntimePaths {
-    /// The runtime's top-level directory within a project root, e.g. `.claude`.
-    pub project_root_dir: PathBuf,
-    /// The runtime's top-level directory within the user's home dir.
-    pub user_root_dir: PathBuf,
-    /// Subdirectory (relative to the scope root) where skills are installed.
-    pub skills_subdir: PathBuf,
-    /// Subdirectory where agent personas are installed.
-    pub agents_subdir: PathBuf,
-    /// Subdirectory where scripts are installed.
-    pub scripts_subdir: PathBuf,
-    /// Path of the hooks configuration file, if this runtime has one.
-    pub hooks_file: Option<PathBuf>,
-    /// Path of the MCP servers configuration file, if this runtime has one.
-    pub mcp_config_file: Option<PathBuf>,
+    /// Directory where [`Skill`]s are installed.
+    pub skills_dir: ScopedRelative,
+    /// Directory where [`Agent`] personas are installed.
+    pub agents_dir: ScopedRelative,
+    /// Directory where [`Script`]s are installed.
+    pub scripts_dir: ScopedRelative,
+    /// Hooks configuration file, if this runtime has one.
+    pub hooks_file: Option<ScopedRelative>,
+    /// MCP servers configuration file, if this runtime has one.
+    pub mcp_config_file: Option<ScopedRelative>,
 }
 
 impl RuntimePaths {
-    /// Resolve the runtime's root directory for the given scope.
-    pub fn root_for(&self, anchor: &Path, scope: Scope) -> PathBuf {
-        match scope {
-            Scope::Project => anchor.join(&self.project_root_dir),
-            Scope::User => anchor.join(&self.user_root_dir),
-        }
+    /// Resolved skills directory, anchored against `anchor`.
+    pub fn skills_dir_for(&self, anchor: &Path, scope: Scope) -> PathBuf {
+        anchor.join(self.skills_dir.for_scope(scope))
     }
 
-    /// Resolved skills directory.
-    pub fn skills_dir(&self, anchor: &Path, scope: Scope) -> PathBuf {
-        self.root_for(anchor, scope).join(&self.skills_subdir)
+    /// Resolved agents directory, anchored against `anchor`.
+    pub fn agents_dir_for(&self, anchor: &Path, scope: Scope) -> PathBuf {
+        anchor.join(self.agents_dir.for_scope(scope))
     }
 
-    /// Resolved agents directory.
-    pub fn agents_dir(&self, anchor: &Path, scope: Scope) -> PathBuf {
-        self.root_for(anchor, scope).join(&self.agents_subdir)
-    }
-
-    /// Resolved scripts directory.
-    pub fn scripts_dir(&self, anchor: &Path, scope: Scope) -> PathBuf {
-        self.root_for(anchor, scope).join(&self.scripts_subdir)
+    /// Resolved scripts directory, anchored against `anchor`.
+    pub fn scripts_dir_for(&self, anchor: &Path, scope: Scope) -> PathBuf {
+        anchor.join(self.scripts_dir.for_scope(scope))
     }
 
     /// Resolved hooks file path, if this runtime has one.
-    pub fn hooks_path(&self, anchor: &Path, scope: Scope) -> Option<PathBuf> {
-        self.hooks_file.as_ref().map(|f| self.root_for(anchor, scope).join(f))
+    pub fn hooks_path_for(&self, anchor: &Path, scope: Scope) -> Option<PathBuf> {
+        self.hooks_file.as_ref().map(|sr| anchor.join(sr.for_scope(scope)))
     }
 
     /// Resolved MCP config file path, if this runtime has one.
-    pub fn mcp_config_path(&self, anchor: &Path, scope: Scope) -> Option<PathBuf> {
-        self.mcp_config_file.as_ref().map(|f| self.root_for(anchor, scope).join(f))
+    pub fn mcp_config_path_for(&self, anchor: &Path, scope: Scope) -> Option<PathBuf> {
+        self.mcp_config_file.as_ref().map(|sr| anchor.join(sr.for_scope(scope)))
     }
 }
 
@@ -171,34 +204,42 @@ pub trait ScriptCapability: CodingAgentRuntime {
 mod tests {
     use super::*;
 
-    #[test]
-    fn runtime_paths_project_scope_resolves_under_anchor() {
-        let paths = RuntimePaths {
-            project_root_dir: ".claude".into(),
-            user_root_dir: ".claude".into(),
-            skills_subdir: "skills".into(),
-            agents_subdir: "agents".into(),
-            scripts_subdir: "scripts".into(),
-            hooks_file: Some("hooks.json".into()),
-            mcp_config_file: Some(".mcp.json".into()),
-        };
-        let anchor = Path::new("/tmp/proj");
-        assert_eq!(paths.skills_dir(anchor, Scope::Project), PathBuf::from("/tmp/proj/.claude/skills"));
-        assert_eq!(paths.hooks_path(anchor, Scope::Project), Some(PathBuf::from("/tmp/proj/.claude/hooks.json")));
+    fn sample_paths() -> RuntimePaths {
+        RuntimePaths {
+            skills_dir: ScopedRelative::same(".claude/skills"),
+            agents_dir: ScopedRelative::same(".claude/agents"),
+            scripts_dir: ScopedRelative::same(".claude/scripts"),
+            hooks_file: Some(ScopedRelative::same(".claude/hooks.json")),
+            mcp_config_file: Some(ScopedRelative::same(".mcp.json")),
+        }
     }
 
     #[test]
-    fn runtime_paths_no_hooks_file_returns_none() {
-        let paths = RuntimePaths {
-            project_root_dir: ".foo".into(),
-            user_root_dir: ".foo".into(),
-            skills_subdir: "skills".into(),
-            agents_subdir: "agents".into(),
-            scripts_subdir: "scripts".into(),
+    fn project_scope_anchors_under_project_root() {
+        let p = sample_paths();
+        let anchor = Path::new("/tmp/proj");
+        assert_eq!(p.skills_dir_for(anchor, Scope::Project), PathBuf::from("/tmp/proj/.claude/skills"));
+        assert_eq!(p.hooks_path_for(anchor, Scope::Project), Some(PathBuf::from("/tmp/proj/.claude/hooks.json")));
+        assert_eq!(p.mcp_config_path_for(anchor, Scope::Project), Some(PathBuf::from("/tmp/proj/.mcp.json")));
+    }
+
+    #[test]
+    fn scoped_relative_distinct_project_and_user() {
+        let sr = ScopedRelative { project: ".claude/skills".into(), user: ".config/claude/skills".into() };
+        assert_eq!(sr.for_scope(Scope::Project), &PathBuf::from(".claude/skills"));
+        assert_eq!(sr.for_scope(Scope::User), &PathBuf::from(".config/claude/skills"));
+    }
+
+    #[test]
+    fn missing_optional_paths_return_none() {
+        let p = RuntimePaths {
+            skills_dir: ScopedRelative::same(".foo/skills"),
+            agents_dir: ScopedRelative::same(".foo/agents"),
+            scripts_dir: ScopedRelative::same(".foo/scripts"),
             hooks_file: None,
             mcp_config_file: None,
         };
-        assert!(paths.hooks_path(Path::new("/"), Scope::Project).is_none());
-        assert!(paths.mcp_config_path(Path::new("/"), Scope::Project).is_none());
+        assert!(p.hooks_path_for(Path::new("/"), Scope::Project).is_none());
+        assert!(p.mcp_config_path_for(Path::new("/"), Scope::Project).is_none());
     }
 }
