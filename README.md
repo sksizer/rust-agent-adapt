@@ -1,43 +1,72 @@
-# Rust Template [![Github Actions][gha-badge]][gha] [![License: MIT][license-badge]][license]
+# agent-adapt
 
-[gha]: https://github.com/PaulRBerg/rust-template/actions
-[gha-badge]: https://github.com/PaulRBerg/rust-template/actions/workflows/ci.yml/badge.svg
-[license]: https://opensource.org/licenses/MIT
-[license-badge]: https://img.shields.io/badge/License-MIT-blue.svg
+Rust data structures and adapters for working with coding-agent configuration
+across the different formats that agents use.
 
-A template for developing Rust projects, with sensible defaults.
+Coding agents (Claude Code, Codex, Gemini, and others) each keep their own
+config files in their own formats and locations. `agent-adapt` provides:
 
-## Getting Started
+- a neutral data model for concepts that live in those configs, and
+- per-agent provider implementations that read/write each agent's native format.
 
-Click the [`Use this template`](https://github.com/PaulRBerg/rust-template/generate) button at the top of the page to
-create a new repository with this repo as the initial state.
+The goal is that a tool integrating with multiple agents can describe *what* it
+wants to configure once, and let `agent-adapt` translate that into the right
+file in the right shape for each agent.
 
-## Features
+## Status
 
-### Sensible Defaults
+Early. The initial focus is MCP server registration — registering an MCP server
+entry into each agent's config file without clobbering unrelated entries. More
+configuration surfaces (permissions, tool allowlists, model defaults, etc.) will
+land over time as the data model is generalized.
 
-This template comes with sensible default configurations in the following files:
+## Supported agents
 
-```text
-├── .editorconfig
-├── .gitignore
-├── .prettierrc.yml
-├── Cargo.toml
-├── justfile
-└── rustfmt.toml
+| Agent       | Config file                  | Format |
+|-------------|------------------------------|--------|
+| Claude Code | `.mcp.json`                  | JSON   |
+| Codex       | `.codex/config.toml`         | TOML   |
+| Gemini      | `.gemini/settings.json`      | JSON   |
+
+Paths are resolved relative to a caller-supplied project root.
+
+## Example — register an MCP server with every known agent
+
+```rust
+use agent_adapt::{McpServer, providers::install_to_all};
+use std::path::Path;
+
+let server = McpServer::http("my-server", "http://localhost:4243/mcp");
+let failures = install_to_all(Path::new("/path/to/project"), &server);
+
+for (agent, err) in failures {
+    eprintln!("failed to configure {agent}: {err}");
+}
 ```
 
-### GitHub Actions
+Each provider merges into any existing config, preserving unrelated entries,
+and creates intermediate directories as needed.
 
-This template comes with GitHub Actions pre-configured. Your code will be linted and tested on every push and pull
-request made to the `main` branch.
+## Example — target a single agent
 
-You can edit the CI script in [.github/workflows/ci.yml](./.github/workflows/ci.yml).
+```rust
+use agent_adapt::{McpServer, providers::ClaudeProvider, AgentConfigProvider};
+use std::path::Path;
 
-## Usage
+let server = McpServer::stdio("my-server", "my-binary", ["--serve"]);
+ClaudeProvider.install(Path::new("/path/to/project"), &server)?;
+# Ok::<(), agent_adapt::Error>(())
+```
 
-See [The Rust Book](https://doc.rust-lang.org/book/) and [The Cargo Book](https://doc.rust-lang.org/cargo/index.html).
+## Design notes
+
+- **Non-destructive merges.** Providers parse the existing file, upsert the
+  entry, and write it back. Other entries and unrelated keys are left alone.
+- **Best-effort fan-out.** `install_to_all` never short-circuits — it runs
+  every provider and returns the collected failures so one agent's breakage
+  can't block the others.
+- **Extensible.** Implement `AgentConfigProvider` to add a new agent.
 
 ## License
 
-This project is licensed under MIT.
+MIT. See [LICENSE.md](./LICENSE.md).

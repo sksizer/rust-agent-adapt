@@ -1,35 +1,23 @@
-use serde::Serialize;
+//! Data model and provider implementations for writing MCP server entries into
+//! AI agent config files.
+//!
+//! # Usage
+//!
+//! ```rust,no_run
+//! use agent_adapt::{McpServer, providers::install_to_all};
+//! use std::path::Path;
+//!
+//! let server = McpServer::http("my-server", "http://localhost:4243/mcp");
+//! let failures = install_to_all(Path::new("/my/project"), &server);
+//! for (agent, err) in failures {
+//!     eprintln!("Failed to configure {agent}: {err}");
+//! }
+//! ```
 
-#[derive(Serialize, Debug)]
-pub struct Point {
-    pub x: i32,
-    pub y: i32,
-}
+mod error;
+mod model;
+pub mod providers;
 
-impl Point {
-    pub fn new(x: i32, y: i32) -> Self {
-        Self { x, y }
-    }
-
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(self).expect("Failed to serialize Point")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_new_point() {
-        let point = Point::new(1, 2);
-        assert_eq!(point.x, 1);
-        assert_eq!(point.y, 2);
-    }
-
-    #[test]
-    fn test_to_json() {
-        let point = Point::new(1, 2);
-        assert_eq!(point.to_json(), r#"{"x":1,"y":2}"#);
-    }
-}
+pub use error::Error;
+pub use model::{McpServer, McpTransport};
+pub use providers::{AgentConfigProvider, all_providers, install_to_all};

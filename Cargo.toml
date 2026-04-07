@@ -1,22 +1,19 @@
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [package]
-    authors = ["Paul Razvan Berg"]
-    description = "A template for developing Rust projects, with sensible defaults"
-    edition = "2021"
-    homepage = "https://github.com/PaulRBerg/rust-template"
-    license = "MIT"
-    name = "rust-template"
-    version = "0.1.0"
+name = "agent-adapt"
+version = "0.1.0"
+edition = "2024"
+description = "Data structures and adapters for reading and writing coding-agent configuration across different agent formats (Claude, Codex, Gemini, ...)."
+license = "MIT"
+repository = "https://github.com/sksizer/rust-agent-adapt"
+homepage = "https://github.com/sksizer/rust-agent-adapt"
+readme = "README.md"
+keywords = ["mcp", "ai", "agent", "claude", "codex"]
+categories = ["config", "development-tools"]
 
 [dependencies]
+serde_json = "1"
+thiserror = "2"
+toml = "0.8"
 
-    # The core APIs, including the Serialize and Deserialize traits. Always
-    # required when using Serde. The "derive" feature is only required when
-    # using #[derive(Serialize, Deserialize)] to make Serde work with structs
-    # and enums defined in your crate.
-    serde = { version = "1.0", features = ["derive"] }
-
-    # Each data format lives in its own crate; the sample code below uses JSON
-    # but you may be using a different one.
-    serde_json = "1.0"
+[dev-dependencies]
+tempfile = "3"
