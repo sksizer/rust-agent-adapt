@@ -1,6 +1,6 @@
 [package]
 name = "agent-adapt"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "Data model and runtime adapters for authoring coding-agent assets (skills, agents, hooks, scripts, packs, MCP servers) once and exporting to Claude Code, Codex CLI, Gemini CLI, and other runtimes."
 license = "MIT"

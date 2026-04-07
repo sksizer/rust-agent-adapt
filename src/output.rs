@@ -1,8 +1,8 @@
 //! The virtual filesystem produced by capability renderers.
 //!
 //! Capability methods return [`ExportedFile`] values rather than writing
-//! to disk. Callers (or install helpers in [`crate::providers`]) decide
-//! whether to materialize them, bundle them, or inspect them in memory.
+//! to disk. Callers (or the helpers in [`crate::install`]) decide whether
+//! to materialize them, bundle them, or inspect them in memory.
 //!
 //! [`ExportedFile::content`] is `Vec<u8>` so binary assets work; the
 //! [`ExportedFile::text`] accessor handles the common UTF-8 case.
