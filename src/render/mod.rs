@@ -9,19 +9,27 @@
 //! # Layers
 //!
 //! * [`frontmatter::FrontmatterBuilder`] — low-level YAML emitter that
-//!   honors the runtime's [`crate::FrontmatterDialect`] (kebab vs snake
-//!   case, omitted fields). Pure string construction; no YAML crate.
+//!   honors the runtime's [`crate::FrontmatterDialect`].
 //! * [`skill_md::render_skill_md`] — composes a [`crate::Skill`] into a
-//!   complete `SKILL.md` body (frontmatter + markdown). Calls the
-//!   frontmatter builder and applies tool-name translation via
-//!   [`crate::ToolRegistry`].
-//! * [`manifest::render_pack_manifest`] — builds a human-readable pack
-//!   overview listing every skill, agent, hook, and script in a bundle.
+//!   complete `SKILL.md` body (frontmatter + markdown).
+//! * [`agent_md::render_agent_md`] — composes an [`crate::Agent`] into
+//!   a markdown file (frontmatter + system prompt body).
+//! * [`hooks_json::render_hooks_json`] — emits a Claude-Code-compatible
+//!   `hooks.json` file with per-runtime matcher translation.
+//! * [`script_body::render_script_body`] — picks the shebang based on
+//!   language and prepends it to the script body.
+//! * [`manifest::render_pack_manifest`] — human-readable pack overview.
 
+pub mod agent_md;
 pub mod frontmatter;
+pub mod hooks_json;
 pub mod manifest;
+pub mod script_body;
 pub mod skill_md;
 
+pub use agent_md::render_agent_md;
 pub use frontmatter::FrontmatterBuilder;
+pub use hooks_json::render_hooks_json;
 pub use manifest::render_pack_manifest;
+pub use script_body::{render_script_body, script_filename};
 pub use skill_md::render_skill_md;
