@@ -1,0 +1,19 @@
+[package]
+name = "agent-adapt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Data structures and adapters for reading and writing coding-agent configuration across different agent formats (Claude, Codex, Gemini, ...)."
+readme = "../../README.md"
+keywords = ["mcp", "ai", "agent", "claude", "codex"]
+categories = ["config", "development-tools"]
+
+[dependencies]
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
