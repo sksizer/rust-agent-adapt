@@ -1,0 +1,14 @@
+[package]
+name = "agent-adapt-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core domain models and traits for agent-adapt: skills, agents, hooks, scripts, packs, and the CodingAgentRuntime trait hierarchy."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
