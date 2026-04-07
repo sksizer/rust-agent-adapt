@@ -1,12 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// The language a [`Script`] is written in. Runtimes use this to pick the
-/// right shebang and file extension at render time.
-///
-/// The enum is deliberately small — bash, python, node — because those are
-/// the only languages agentpants' adapters support today. [`ScriptLanguage::Other`]
-/// is the escape hatch for runtimes with broader support; the string is
-/// taken verbatim as the file extension and no shebang is emitted.
+/// The language a [`Script`] is written in.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScriptLanguage {
@@ -22,7 +16,7 @@ pub enum ScriptLanguage {
 }
 
 impl ScriptLanguage {
-    /// Filename extension (without leading dot) used when writing scripts to disk.
+    /// File extension (without leading dot).
     pub fn extension(&self) -> &str {
         match self {
             Self::Bash => "sh",
@@ -32,8 +26,7 @@ impl ScriptLanguage {
         }
     }
 
-    /// Shebang line (without trailing newline) for this language, or `None`
-    /// if the language has no standard shebang.
+    /// Shebang line (without trailing newline), or `None` for `Other`.
     pub fn shebang(&self) -> Option<&'static str> {
         match self {
             Self::Bash => Some("#!/usr/bin/env bash"),
@@ -45,30 +38,25 @@ impl ScriptLanguage {
 }
 
 /// A standalone script shipped as part of a pack.
-///
-/// Scripts are the most runtime-agnostic pack component — most runtimes
-/// just drop them into a `scripts/` directory with the right shebang and
-/// leave execution to the hook or command that invokes them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Script {
     /// Human-readable name.
     pub name: String,
-    /// Stable kebab-case identifier used as the filename base.
+    /// Stable kebab-case identifier used as filename base.
     pub slug: String,
     /// Optional description.
     pub description: Option<String>,
     /// Script language — determines extension and shebang.
     pub language: ScriptLanguage,
-    /// Full script body (without shebang — the shebang is prepended at
-    /// render time based on [`Script::language`]).
+    /// Script body (without shebang — prepended at render time).
     pub body: String,
-    /// Execution timeout in milliseconds. `0` means "no timeout / runtime default."
+    /// Execution timeout in milliseconds. `0` means no timeout.
     pub timeout_ms: i64,
     /// Free-form tags.
     #[serde(default)]
     pub tags: Vec<String>,
     /// Optional category.
     pub category: Option<String>,
-    /// If `true`, this script is a template to be cloned.
+    /// If `true`, this script is a template.
     pub is_template: bool,
 }

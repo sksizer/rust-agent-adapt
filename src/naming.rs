@@ -1,40 +1,31 @@
 //! Canonical kebab-case slugging for skill and tool names.
 //!
-//! Agentpants historically had two copies of this logic ([`slugify_skill_name`]
-//! in `export/skill_md.rs` with a 64-char truncation, and `to_tool_name` in
-//! `export/validation.rs` without one), which drifted. This module is the
-//! single source of truth: [`slugify`] does the kebab conversion once, and
-//! [`slugify_skill_name`] layers the Agent Skills spec 64-character limit on
-//! top.
+//! `agent-adapt` uses one slugger, period. [`slugify`] does the kebab
+//! conversion once, and [`slugify_skill_name`] layers the Agent Skills
+//! spec 64-character limit on top.
 //!
 //! # Slugging rules
 //!
 //! 1. Lowercase every ASCII alphabetic character.
 //! 2. Keep ASCII alphanumerics and hyphens as-is.
-//! 3. Replace every other character (including spaces, underscores, and
-//!    unicode punctuation) with a single hyphen.
+//! 3. Replace every other character with a single hyphen.
 //! 4. Collapse consecutive hyphens into one.
 //! 5. Trim leading and trailing hyphens.
 //!
-//! [`slugify_skill_name`] additionally truncates the result to 64 characters
-//! and re-trims any trailing hyphen introduced by truncation, matching the
-//! Anthropic Agent Skills spec for the `name:` frontmatter field.
+//! [`slugify_skill_name`] additionally truncates to 64 characters and
+//! re-trims any trailing hyphen introduced by truncation.
 
 use std::collections::HashSet;
 
 /// Maximum length of a skill name per the Agent Skills spec.
 pub const SKILL_NAME_MAX_LEN: usize = 64;
 
-/// Convert an arbitrary string into a kebab-case slug.
-///
-/// See the [module docs](self) for the exact rules. No length limit is
-/// applied — use [`slugify_skill_name`] for the spec-compliant skill-name
-/// variant.
+/// Convert an arbitrary string into a kebab-case slug. No length limit.
 ///
 /// # Examples
 ///
 /// ```
-/// use agent_adapt_core::naming::slugify;
+/// use agent_adapt::naming::slugify;
 /// assert_eq!(slugify("My Cool Skill"), "my-cool-skill");
 /// assert_eq!(slugify("skill@v2.0!"), "skill-v2-0");
 /// assert_eq!(slugify("a---b___c"), "a-b-c");
@@ -46,7 +37,6 @@ pub fn slugify(name: &str) -> String {
         .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c.to_ascii_lowercase() } else { '-' })
         .collect();
 
-    // Collapse consecutive hyphens.
     let mut collapsed = String::with_capacity(mapped.len());
     let mut last_was_hyphen = false;
     for c in mapped.chars() {
@@ -64,13 +54,13 @@ pub fn slugify(name: &str) -> String {
     collapsed.trim_matches('-').to_string()
 }
 
-/// Slugify a skill name and clamp it to the Agent Skills spec's 64-character
+/// Slugify a skill name and clamp to the Agent Skills spec's 64-character
 /// limit, re-trimming any trailing hyphen introduced by truncation.
 ///
 /// # Examples
 ///
 /// ```
-/// use agent_adapt_core::naming::slugify_skill_name;
+/// use agent_adapt::naming::slugify_skill_name;
 /// assert_eq!(slugify_skill_name("My Skill"), "my-skill");
 /// let long = "a".repeat(100);
 /// assert_eq!(slugify_skill_name(&long).len(), 64);
@@ -83,16 +73,14 @@ pub fn slugify_skill_name(name: &str) -> String {
 /// Disambiguate a list of tool/skill names in place by appending numeric
 /// suffixes to duplicates.
 ///
-/// The first occurrence of each name is left untouched; subsequent
-/// occurrences gain a `-1`, `-2`, ... suffix. The suffix counter restarts
-/// from 1 for each distinct base name, and suffixed names that would collide
-/// with an existing entry are skipped to the next integer.
+/// The first occurrence is left untouched; subsequent occurrences gain a
+/// `-1`, `-2`, ... suffix.
 ///
 /// # Examples
 ///
 /// ```
-/// use agent_adapt_core::naming::deduplicate_tool_names;
-/// let mut names = vec!["read".to_string(), "read".to_string(), "write".to_string()];
+/// use agent_adapt::naming::deduplicate_tool_names;
+/// let mut names = vec!["read".into(), "read".into(), "write".into()];
 /// deduplicate_tool_names(&mut names);
 /// assert_eq!(names, vec!["read", "read-1", "write"]);
 /// ```
@@ -140,8 +128,6 @@ mod tests {
 
     #[test]
     fn slugify_unicode_becomes_hyphens() {
-        // Non-ASCII characters are treated as separators, consistent with the
-        // agentpants implementation we replaced.
         assert_eq!(slugify("café résumé"), "caf-r-sum");
     }
 
@@ -158,13 +144,11 @@ mod tests {
     #[test]
     fn slugify_skill_name_truncates_to_64() {
         let long = "a".repeat(100);
-        let result = slugify_skill_name(&long);
-        assert_eq!(result.len(), SKILL_NAME_MAX_LEN);
+        assert_eq!(slugify_skill_name(&long).len(), SKILL_NAME_MAX_LEN);
     }
 
     #[test]
     fn slugify_skill_name_trims_hyphen_after_truncation() {
-        // Construct a name whose 64th character is a hyphen, forcing retrim.
         let name = format!("{}-tail", "a".repeat(63));
         let result = slugify_skill_name(&name);
         assert!(!result.ends_with('-'));
