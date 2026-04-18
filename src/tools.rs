@@ -92,7 +92,7 @@ impl ToolRegistry {
             }
         }
 
-        mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        mappings.sort_by_key(|b| std::cmp::Reverse(b.0.len()));
 
         let mut result = body.to_string();
         for (src, dst) in &mappings {
