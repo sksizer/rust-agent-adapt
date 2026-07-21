@@ -66,6 +66,13 @@ pub fn render_skill_md(
         b.boolean("disable_model_invocation", true);
     }
 
+    // Annotations last: unrecognized keys re-emitted verbatim, in the
+    // sorted order the BTreeMap already guarantees. Keys colliding with a
+    // modeled field emitted above are skipped by the builder.
+    for (key, value) in &skill.annotations {
+        b.raw_entry(key, value);
+    }
+
     let frontmatter = b.build();
     format!("{frontmatter}\n{body}\n", body = skill.body)
 }
@@ -164,6 +171,29 @@ mod tests {
         s.context_mode = Some("something-else".into());
         let out = render_skill_md(&s, RuntimeId::ClaudeCode, &kebab_dialect(), &ToolRegistry::default());
         assert!(!out.contains("context:"));
+    }
+
+    #[test]
+    fn annotations_emitted_after_modeled_fields_sorted() {
+        let mut s = minimal_skill();
+        s.annotations.insert("zeta".into(), serde_json::json!(3));
+        s.annotations.insert("alpha_key".into(), serde_json::json!("v"));
+        let out = render_skill_md(&s, RuntimeId::ClaudeCode, &kebab_dialect(), &ToolRegistry::default());
+        let close = out.find("\n---\n").expect("closing fence");
+        let fm = &out[..close];
+        let alpha = fm.find("alpha_key: v").expect("alpha_key emitted");
+        let zeta = fm.find("zeta: 3").expect("zeta emitted");
+        assert!(fm.find("description:").unwrap() < alpha, "annotations follow modeled fields");
+        assert!(alpha < zeta, "sorted key order");
+    }
+
+    #[test]
+    fn annotation_colliding_with_modeled_field_is_dropped() {
+        let mut s = minimal_skill();
+        s.annotations.insert("description".into(), serde_json::json!("clobber"));
+        let out = render_skill_md(&s, RuntimeId::ClaudeCode, &kebab_dialect(), &ToolRegistry::default());
+        assert_eq!(out.matches("description:").count(), 1);
+        assert!(!out.contains("clobber"));
     }
 
     #[test]

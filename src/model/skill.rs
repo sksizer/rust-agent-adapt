@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// A user-authored skill: the atomic unit of capability a runtime can
@@ -22,6 +24,14 @@ use serde::{Deserialize, Serialize};
 ///   `user-invocable: false` only when it's `false`.
 /// * [`Skill::disable_model_invocation`] is a direct mapping — `true`
 ///   emits the frontmatter field, `false` omits it.
+/// * [`Skill::annotations`] carries frontmatter keys the model does not
+///   understand. Render impls re-emit them verbatim (no dialect naming
+///   conversion, no tool translation) after the modeled fields, in sorted
+///   key order, so adopting a skill from disk and re-rendering it is
+///   lossless for unrecognized keys.
+/// * [`Skill::resources`] are peer files that ship beside `SKILL.md`
+///   (scripts, templates, references). Render impls emit each one under
+///   the same slug directory as the `SKILL.md`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Skill {
     /// Human-readable name, e.g. `"Requirements Interview"`.
@@ -46,6 +56,31 @@ pub struct Skill {
     /// Free-form tags for categorization.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Unrecognized frontmatter keys, re-emitted verbatim at render time.
+    ///
+    /// A `BTreeMap` so emission order is deterministic regardless of how
+    /// the map was populated. Keys must not collide with a modeled field
+    /// the render would also emit — colliding keys are skipped, the
+    /// modeled field wins.
+    #[serde(default)]
+    pub annotations: BTreeMap<String, serde_json::Value>,
+    /// Peer files shipped beside `SKILL.md` under the slug directory.
+    #[serde(default)]
+    pub resources: Vec<SkillResource>,
+}
+
+/// One peer file belonging to a [`Skill`] — rendered into the slug
+/// directory beside `SKILL.md`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SkillResource {
+    /// Path relative to the skill's slug directory, forward-slashed
+    /// (e.g. `"scripts/run.sh"`).
+    pub relative_path: String,
+    /// Raw bytes — binary assets work.
+    pub content: Vec<u8>,
+    /// Whether install layers should set the executable bit.
+    #[serde(default)]
+    pub executable: bool,
 }
 
 impl Skill {
@@ -62,6 +97,8 @@ impl Skill {
             user_invocable: true,
             disable_model_invocation: false,
             tags: Vec::new(),
+            annotations: BTreeMap::new(),
+            resources: Vec::new(),
         }
     }
 }

@@ -134,6 +134,29 @@ mod tests {
     }
 
     #[test]
+    fn skill_resources_render_under_the_slug_dir() {
+        let mut s = sample_skill();
+        s.resources.push(crate::SkillResource {
+            relative_path: "scripts/run.sh".into(),
+            content: b"#!/bin/sh\n".to_vec(),
+            executable: true,
+        });
+        s.resources.push(crate::SkillResource {
+            relative_path: "notes.md".into(),
+            content: b"peer\n".to_vec(),
+            executable: false,
+        });
+        let files = ClaudeCode.render_skill(&s).unwrap();
+        assert_eq!(files.len(), 3);
+        assert_eq!(files[0].path, PathBuf::from(".claude/skills/my-skill/SKILL.md"));
+        assert_eq!(files[1].path, PathBuf::from(".claude/skills/my-skill/scripts/run.sh"));
+        assert_eq!(files[1].kind, ExportedFileType::Resource);
+        assert!(files[1].executable);
+        assert_eq!(files[2].path, PathBuf::from(".claude/skills/my-skill/notes.md"));
+        assert!(!files[2].executable);
+    }
+
+    #[test]
     fn agent_path_uses_slug() {
         let agent = Agent::new("Reviewer", "reviewer");
         let files = ClaudeCode.render_agent(&agent).unwrap();

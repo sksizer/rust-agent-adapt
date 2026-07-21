@@ -42,7 +42,7 @@ pub mod tools;
 
 pub use error::Error;
 pub use mcp::{McpServer, McpTransport};
-pub use model::{Agent, Hook, Pack, PackBundle, Role, Script, ScriptLanguage, Skill};
+pub use model::{Agent, Hook, Pack, PackBundle, Role, Script, ScriptLanguage, Skill, SkillResource};
 pub use output::{ExportedFile, ExportedFileType, ExportedTree};
 pub use runtime::{
     AgentCapability, CodingAgentRuntime, FieldNaming, FrontmatterDialect, HookCapability, RuntimeId, RuntimePaths,

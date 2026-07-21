@@ -72,7 +72,28 @@ fn write_one(file: &ExportedFile, anchor: &Path) -> Result<PathBuf> {
         fs::create_dir_all(parent)?;
     }
     fs::write(&absolute, &file.content)?;
+    set_executable(&absolute, file.executable)?;
     Ok(absolute)
+}
+
+/// Set or clear the executable bits to match [`ExportedFile::executable`].
+/// No-op on non-unix platforms.
+#[cfg(unix)]
+fn set_executable(path: &Path, executable: bool) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = fs::metadata(path)?.permissions();
+    let mode = perms.mode();
+    let desired = if executable { mode | 0o111 } else { mode & !0o111 };
+    if desired != mode {
+        perms.set_mode(desired);
+        fs::set_permissions(path, perms)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_executable(_path: &Path, _executable: bool) -> Result<()> {
+    Ok(())
 }
 
 /// Render and install a single [`Skill`] onto `project_root`.
@@ -201,6 +222,33 @@ mod tests {
         let expected = dir.path().join(".claude/skills/my-skill/SKILL.md");
         assert_eq!(written[0], expected);
         assert!(expected.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_skill_applies_resource_exec_bits() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        let mut skill = Skill::new("My Skill", "desc", "body");
+        skill.resources.push(crate::SkillResource {
+            relative_path: "run.sh".into(),
+            content: b"#!/bin/sh\n".to_vec(),
+            executable: true,
+        });
+        skill.resources.push(crate::SkillResource {
+            relative_path: "notes.md".into(),
+            content: b"peer\n".to_vec(),
+            executable: false,
+        });
+        let written = install_skill(&ClaudeCode, dir.path(), Scope::Project, &skill).unwrap();
+        assert_eq!(written.len(), 3);
+        let mode_of = |name: &str| {
+            let p = dir.path().join(".claude/skills/my-skill").join(name);
+            fs::metadata(p).unwrap().permissions().mode()
+        };
+        assert_ne!(mode_of("run.sh") & 0o111, 0, "script gets exec bits");
+        assert_eq!(mode_of("notes.md") & 0o111, 0, "plain resource stays non-executable");
+        assert_eq!(mode_of("SKILL.md") & 0o111, 0);
     }
 
     #[test]

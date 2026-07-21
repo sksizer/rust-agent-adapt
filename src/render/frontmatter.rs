@@ -37,19 +37,22 @@ use crate::{FieldNaming, FrontmatterDialect};
 pub struct FrontmatterBuilder<'a> {
     dialect: &'a FrontmatterDialect,
     lines: Vec<String>,
+    emitted_names: Vec<String>,
 }
 
 impl<'a> FrontmatterBuilder<'a> {
     /// Start a new frontmatter block with the given dialect.
     pub fn new(dialect: &'a FrontmatterDialect) -> Self {
-        Self { dialect, lines: Vec::new() }
+        Self { dialect, lines: Vec::new(), emitted_names: Vec::new() }
     }
 
-    fn render_name(&self, canonical: &str) -> String {
-        match self.dialect.field_naming {
+    fn render_name(&mut self, canonical: &str) -> String {
+        let name = match self.dialect.field_naming {
             FieldNaming::Snake => canonical.to_string(),
             FieldNaming::Kebab => canonical.replace('_', "-"),
-        }
+        };
+        self.emitted_names.push(name.clone());
+        name
     }
 
     fn is_omitted(&self, canonical: &str) -> bool {
@@ -113,6 +116,28 @@ impl<'a> FrontmatterBuilder<'a> {
         self
     }
 
+    /// Emit an annotation entry: a verbatim field name and an arbitrary
+    /// JSON value rendered as YAML.
+    ///
+    /// Annotations are frontmatter keys the model does not understand, so
+    /// no dialect naming conversion and no `omit_fields` check apply — the
+    /// key is emitted exactly as given. Nested objects render as indented
+    /// block maps with sorted keys, arrays as block sequences, and strings
+    /// are double-quoted whenever a plain scalar would re-parse as a
+    /// different type.
+    ///
+    /// An entry whose name matches a field this builder already emitted is
+    /// skipped — the modeled field wins, and the frontmatter never carries
+    /// a duplicate key.
+    pub fn raw_entry(&mut self, name: &str, value: &serde_json::Value) -> &mut Self {
+        if self.emitted_names.iter().any(|n| n == name) {
+            return self;
+        }
+        self.emitted_names.push(name.to_string());
+        emit_yaml_entry(name, value, 0, &mut self.lines);
+        self
+    }
+
     /// Finalize and return the frontmatter block including the surrounding
     /// `---` delimiters.
     pub fn build(self) -> String {
@@ -126,9 +151,97 @@ impl<'a> FrontmatterBuilder<'a> {
     }
 }
 
+/// Append `key: value` (recursing into arrays and objects) at the given
+/// indent level. Object keys are sorted so output is deterministic even
+/// when `serde_json` is built with `preserve_order`.
+fn emit_yaml_entry(key: &str, value: &serde_json::Value, indent: usize, out: &mut Vec<String>) {
+    use serde_json::Value;
+    let pad = "  ".repeat(indent);
+    match value {
+        Value::Array(items) if items.is_empty() => out.push(format!("{pad}{key}: []")),
+        Value::Object(map) if map.is_empty() => out.push(format!("{pad}{key}: {{}}")),
+        Value::Array(items) => {
+            out.push(format!("{pad}{key}:"));
+            for item in items {
+                emit_yaml_sequence_item(item, indent + 1, out);
+            }
+        }
+        Value::Object(map) => {
+            out.push(format!("{pad}{key}:"));
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            for k in keys {
+                emit_yaml_entry(k, &map[k.as_str()], indent + 1, out);
+            }
+        }
+        scalar => out.push(format!("{pad}{key}: {}", yaml_scalar(scalar))),
+    }
+}
+
+/// Append one `- item` sequence entry, recursing for nested collections.
+fn emit_yaml_sequence_item(item: &serde_json::Value, indent: usize, out: &mut Vec<String>) {
+    use serde_json::Value;
+    let pad = "  ".repeat(indent);
+    match item {
+        Value::Array(items) if items.is_empty() => out.push(format!("{pad}- []")),
+        Value::Object(map) if map.is_empty() => out.push(format!("{pad}- {{}}")),
+        Value::Array(items) => {
+            out.push(format!("{pad}-"));
+            for nested in items {
+                emit_yaml_sequence_item(nested, indent + 1, out);
+            }
+        }
+        Value::Object(map) => {
+            out.push(format!("{pad}-"));
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            for k in keys {
+                emit_yaml_entry(k, &map[k.as_str()], indent + 1, out);
+            }
+        }
+        scalar => out.push(format!("{pad}- {}", yaml_scalar(scalar))),
+    }
+}
+
+/// Render a scalar JSON value as a YAML scalar.
+///
+/// Strings emit plain only when re-parsing them cannot change their type
+/// or structure; anything ambiguous (empty, bool/null/number lookalikes,
+/// YAML indicator characters, leading/trailing spaces, newlines) is
+/// double-quoted via JSON escaping, which is valid YAML.
+fn yaml_scalar(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) if plain_scalar_safe(s) => s.clone(),
+        Value::String(s) => Value::String(s.clone()).to_string(),
+        // Arrays/objects never reach here — the emitters above match them.
+        other => other.to_string(),
+    }
+}
+
+fn plain_scalar_safe(s: &str) -> bool {
+    let Some(first) = s.chars().next() else {
+        return false;
+    };
+    let lower = s.to_ascii_lowercase();
+    if matches!(lower.as_str(), "true" | "false" | "null" | "~" | "yes" | "no" | "on" | "off") {
+        return false;
+    }
+    if s.parse::<f64>().is_ok() {
+        return false;
+    }
+    (first.is_ascii_alphanumeric() || first == '_' || first == '/')
+        && !s.ends_with(' ')
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '_' | '-' | '.' | '/'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn kebab() -> FrontmatterDialect {
         FrontmatterDialect { field_naming: FieldNaming::Kebab, omit_fields: &[], emit_user_invocable_default: false }
@@ -222,6 +335,99 @@ mod tests {
         let out = b.build();
         assert!(!out.contains("argument-hint"));
         assert!(out.contains("name: y"));
+    }
+
+    #[test]
+    fn raw_entry_scalar_kinds() {
+        let d = kebab();
+        let mut b = FrontmatterBuilder::new(&d);
+        b.raw_entry("count", &json!(3));
+        b.raw_entry("ratio", &json!(1.5));
+        b.raw_entry("enabled", &json!(true));
+        b.raw_entry("nothing", &json!(null));
+        b.raw_entry("label", &json!("plain value"));
+        let out = b.build();
+        assert!(out.contains("count: 3"));
+        assert!(out.contains("ratio: 1.5"));
+        assert!(out.contains("enabled: true"));
+        assert!(out.contains("nothing: null"));
+        assert!(out.contains("label: plain value"));
+    }
+
+    #[test]
+    fn raw_entry_quotes_ambiguous_strings() {
+        let d = kebab();
+        let mut b = FrontmatterBuilder::new(&d);
+        b.raw_entry("looks_bool", &json!("true"));
+        b.raw_entry("looks_num", &json!("42"));
+        b.raw_entry("has_colon", &json!("key: value"));
+        b.raw_entry("multiline", &json!("a\nb"));
+        b.raw_entry("empty", &json!(""));
+        let out = b.build();
+        assert!(out.contains("looks_bool: \"true\""));
+        assert!(out.contains("looks_num: \"42\""));
+        assert!(out.contains("has_colon: \"key: value\""));
+        assert!(out.contains("multiline: \"a\\nb\""));
+        assert!(out.contains("empty: \"\""));
+    }
+
+    #[test]
+    fn raw_entry_name_is_verbatim_not_dialected() {
+        let d = kebab();
+        let mut b = FrontmatterBuilder::new(&d);
+        b.raw_entry("snake_key", &json!("v"));
+        let out = b.build();
+        assert!(out.contains("snake_key: v"));
+        assert!(!out.contains("snake-key"));
+    }
+
+    #[test]
+    fn raw_entry_nested_collections() {
+        let d = kebab();
+        let mut b = FrontmatterBuilder::new(&d);
+        b.raw_entry("meta", &json!({"zeta": [1, 2], "alpha": {"inner": "x"}}));
+        b.raw_entry("list", &json!(["a", {"k": "v"}]));
+        b.raw_entry("empty_list", &json!([]));
+        b.raw_entry("empty_map", &json!({}));
+        let out = b.build();
+        let expected = "\
+meta:
+  alpha:
+    inner: x
+  zeta:
+    - 1
+    - 2
+list:
+  - a
+  -
+    k: v
+empty_list: []
+empty_map: {}
+";
+        assert_eq!(out, format!("---\n{expected}---\n"));
+    }
+
+    #[test]
+    fn raw_entry_skips_names_already_emitted() {
+        let d = kebab();
+        let mut b = FrontmatterBuilder::new(&d);
+        b.scalar("model", "opus");
+        b.raw_entry("model", &json!("haiku"));
+        b.raw_entry("model", &json!("sonnet"));
+        let out = b.build();
+        assert_eq!(out.matches("model:").count(), 1);
+        assert!(out.contains("model: opus"));
+    }
+
+    #[test]
+    fn raw_entry_duplicate_guard_uses_rendered_name() {
+        let d = kebab();
+        let mut b = FrontmatterBuilder::new(&d);
+        b.list("allowed_tools", &["Read".into()]);
+        b.raw_entry("allowed-tools", &json!("clobber"));
+        let out = b.build();
+        assert_eq!(out.matches("allowed-tools:").count(), 1);
+        assert!(!out.contains("clobber"));
     }
 
     #[test]

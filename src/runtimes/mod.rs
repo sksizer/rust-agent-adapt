@@ -40,7 +40,7 @@ pub use gemini_cli::GeminiCli;
 pub use npm_package::NpmPackage;
 pub use opencode::OpenCode;
 
-use crate::{CodingAgentRuntime, RuntimeId};
+use crate::{CodingAgentRuntime, RuntimeId, SkillCapability};
 
 /// Return every built-in runtime as a boxed trait object, in a stable
 /// order (matching [`RuntimeId`] variant declaration order).
@@ -72,6 +72,22 @@ pub fn for_id(id: RuntimeId) -> Option<Box<dyn CodingAgentRuntime>> {
     })
 }
 
+/// Look up a runtime by [`RuntimeId`] as a boxed [`SkillCapability`], so
+/// callers can call `render_skill` without matching on the concrete
+/// runtime type themselves. Every built-in runtime renders skills, so
+/// this returns `Some` for all current variants; the `Option` exists for
+/// future runtimes that might not.
+pub fn skill_renderer_for(id: RuntimeId) -> Option<Box<dyn SkillCapability>> {
+    Some(match id {
+        RuntimeId::ClaudeCode => Box::new(ClaudeCode),
+        RuntimeId::GeminiCli => Box::new(GeminiCli),
+        RuntimeId::CodexCli => Box::new(CodexCli),
+        RuntimeId::OpenCode => Box::new(OpenCode),
+        RuntimeId::Amp => Box::new(Amp),
+        RuntimeId::NpmPackage => Box::new(NpmPackage),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,6 +95,16 @@ mod tests {
     #[test]
     fn all_returns_six_runtimes() {
         assert_eq!(all().len(), 6);
+    }
+
+    #[test]
+    fn skill_renderer_for_covers_every_runtime() {
+        let skill = crate::Skill::new("Probe", "d", "b");
+        for runtime in all() {
+            let renderer = skill_renderer_for(runtime.id()).expect("every built-in renders skills");
+            assert_eq!(renderer.id(), runtime.id());
+            assert!(!renderer.render_skill(&skill).unwrap().is_empty());
+        }
     }
 
     #[test]
