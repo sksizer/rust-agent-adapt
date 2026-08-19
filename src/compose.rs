@@ -68,6 +68,7 @@ where
         path: "MANIFEST.md".into(),
         content: render_pack_manifest(bundle).into_bytes(),
         kind: ExportedFileType::Manifest,
+        executable: false,
     });
 
     Ok(tree)
@@ -103,6 +104,7 @@ where
         path: "MANIFEST.md".into(),
         content: render_pack_manifest(bundle).into_bytes(),
         kind: ExportedFileType::Manifest,
+        executable: false,
     });
 
     Ok(tree)

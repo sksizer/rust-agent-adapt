@@ -20,12 +20,13 @@ use crate::{
     naming::slugify_skill_name,
 };
 
-/// Render a skill as a single `SKILL.md` file at
-/// `<skills_dir>/<slug>/SKILL.md`.
+/// Render a skill as `<skills_dir>/<slug>/SKILL.md` plus one file per
+/// [`Skill::resources`] entry under the same slug directory.
 ///
 /// The path is taken from the runtime's
 /// [`RuntimePaths::skills_dir`](crate::RuntimePaths::skills_dir) for the
-/// project scope — that's the canonical install location.
+/// project scope — that's the canonical install location. The `SKILL.md`
+/// is always first; resources follow in declaration order.
 pub fn render_skill<R: CodingAgentRuntime + ?Sized>(
     runtime: &R,
     skill: &Skill,
@@ -34,8 +35,22 @@ pub fn render_skill<R: CodingAgentRuntime + ?Sized>(
     let slug = slugify_skill_name(&skill.name);
     let content = render_skill_md(skill, runtime.id(), runtime.frontmatter_dialect(), registry);
     let skills_dir = runtime.paths().skills_dir.for_scope(Scope::Project);
-    let path: PathBuf = skills_dir.join(&slug).join("SKILL.md");
-    Ok(vec![ExportedFile { path, content: content.into_bytes(), kind: ExportedFileType::Skill }])
+    let slug_dir: PathBuf = skills_dir.join(&slug);
+    let mut files = vec![ExportedFile {
+        path: slug_dir.join("SKILL.md"),
+        content: content.into_bytes(),
+        kind: ExportedFileType::Skill,
+        executable: false,
+    }];
+    for resource in &skill.resources {
+        files.push(ExportedFile {
+            path: slug_dir.join(&resource.relative_path),
+            content: resource.content.clone(),
+            kind: ExportedFileType::Resource,
+            executable: resource.executable,
+        });
+    }
+    Ok(files)
 }
 
 /// Render an agent as a single `<slug>.md` file under the runtime's
@@ -48,7 +63,7 @@ pub fn render_agent<R: CodingAgentRuntime + ?Sized>(
     let content = render_agent_md(agent, runtime.id(), runtime.frontmatter_dialect(), registry);
     let agents_dir = runtime.paths().agents_dir.for_scope(Scope::Project);
     let path = agents_dir.join(format!("{}.md", agent.slug));
-    Ok(vec![ExportedFile { path, content: content.into_bytes(), kind: ExportedFileType::Agent }])
+    Ok(vec![ExportedFile { path, content: content.into_bytes(), kind: ExportedFileType::Agent, executable: false }])
 }
 
 /// Render a collection of hooks as a single file at the runtime's
@@ -72,6 +87,7 @@ pub fn render_hooks<R: CodingAgentRuntime + ?Sized>(
         path: hooks_file.for_scope(Scope::Project).clone(),
         content: content.into_bytes(),
         kind: ExportedFileType::Hook,
+        executable: false,
     }])
 }
 
@@ -81,7 +97,7 @@ pub fn render_script<R: CodingAgentRuntime + ?Sized>(runtime: &R, script: &Scrip
     let content = render_script_body(script);
     let scripts_dir = runtime.paths().scripts_dir.for_scope(Scope::Project);
     let path = scripts_dir.join(script_filename(script));
-    Ok(ExportedFile { path, content: content.into_bytes(), kind: ExportedFileType::Script })
+    Ok(ExportedFile { path, content: content.into_bytes(), kind: ExportedFileType::Script, executable: true })
 }
 
 /// Wrap a pre-rendered MCP config string in an [`ExportedFile`] at the
@@ -98,5 +114,6 @@ pub fn wrap_mcp_config<R: CodingAgentRuntime + ?Sized>(runtime: &R, config_conte
         path: mcp_file.for_scope(Scope::Project).clone(),
         content: config_content.into_bytes(),
         kind: ExportedFileType::Config,
+        executable: false,
     }]
 }

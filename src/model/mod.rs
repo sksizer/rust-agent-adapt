@@ -22,4 +22,4 @@ pub use hook::Hook;
 pub use pack::{Pack, PackBundle};
 pub use role::Role;
 pub use script::{Script, ScriptLanguage};
-pub use skill::Skill;
+pub use skill::{Skill, SkillResource};

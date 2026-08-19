@@ -27,6 +27,8 @@ pub enum ExportedFileType {
     Hook,
     /// An executable script.
     Script,
+    /// A skill's peer file, rendered beside its `SKILL.md`.
+    Resource,
     /// A runtime configuration file (e.g. `.mcp.json`).
     Config,
     /// A pack manifest (e.g. `CLAUDE.md`).
@@ -46,12 +48,16 @@ pub struct ExportedFile {
     pub content: Vec<u8>,
     /// Classification of what this file represents.
     pub kind: ExportedFileType,
+    /// Whether install layers should set the executable bit when
+    /// materializing this file.
+    #[serde(default)]
+    pub executable: bool,
 }
 
 impl ExportedFile {
-    /// Construct from a UTF-8 string body.
+    /// Construct from a UTF-8 string body. Not executable.
     pub fn text_file(path: impl Into<PathBuf>, text: impl Into<String>, kind: ExportedFileType) -> Self {
-        Self { path: path.into(), content: text.into().into_bytes(), kind }
+        Self { path: path.into(), content: text.into().into_bytes(), kind, executable: false }
     }
 
     /// Interpret the content as UTF-8. Returns [`Error::Render`] on failure.
@@ -148,7 +154,12 @@ mod tests {
 
     #[test]
     fn text_errors_on_invalid_utf8() {
-        let f = ExportedFile { path: "bad.bin".into(), content: vec![0xff, 0xfe, 0xfd], kind: ExportedFileType::Other };
+        let f = ExportedFile {
+            path: "bad.bin".into(),
+            content: vec![0xff, 0xfe, 0xfd],
+            kind: ExportedFileType::Other,
+            executable: false,
+        };
         assert!(f.text().is_err());
     }
 
